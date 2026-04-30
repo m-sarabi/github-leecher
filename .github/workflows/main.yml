@@ -33,9 +33,10 @@ jobs:
       - name: Download file
         id: download_file
         run: |
-          curl -L --fail --retry 3 -o downloaded_file "${{ github.event.inputs.file_url }}"
-          echo "File downloaded. Size: $(ls -lh downloaded_file | awk '{print $5}')"
-          echo "downloaded_file_name=downloaded_file" >> $GITHUB_OUTPUT
+          curl -LJO --fail --retry 3 "${{ github.event.inputs.file_url }}"
+          # curl -J will use the filename from the header; we can detect the downloaded file
+          DOWNLOADED_FILE=$(ls -t | head -1)   # crude but works in a clean workspace
+          echo "downloaded_file_name=$DOWNLOADED_FILE" >> $GITHUB_OUTPUT
 
       - name: Extract original filename and prepare for archive
         id: get_filename
@@ -65,17 +66,6 @@ jobs:
 
           # Full base name
           FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${FILENAME_BASE}"
-
-          # --- Shorten long file names ---
-          MAX_TOTAL_LEN=50
-          CURRENT_LEN=${#FULL_ARCHIVE_NAME}
-
-          if [[ $CURRENT_LEN -gt $MAX_TOTAL_LEN ]]; then
-            BASE_LEN_TO_KEEP=$((MAX_TOTAL_LEN - ${#ARCHIVE_PREFIX} - ${#FILENAME_EXT} - 1))
-            if [[ $BASE_LEN_TO_KEEP -lt 1 ]]; then BASE_LEN_TO_KEEP=1; fi
-            SHORT_FILENAME_BASE=$(echo "$FILENAME_BASE" | cut -c 1-$BASE_LEN_TO_KEEP)
-            FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${SHORT_FILENAME_BASE}"
-          fi
           
           # Append file extension
           if [[ -n "$FILENAME_EXT" ]]; then
