@@ -44,7 +44,9 @@ jobs:
           ORIGINAL_URL="${{ github.event.inputs.file_url }}"
 
           # Extract filename from URL
-          FILENAME_FROM_URL=$(basename "$ORIGINAL_URL")
+          CLEAN_URL="${ORIGINAL_URL%%\?*}"
+          CLEAN_URL="${CLEAN_URL%%#*}"
+          FILENAME_FROM_URL=$(basename "$CLEAN_URL")
           if [[ -z "$FILENAME_FROM_URL" || "$FILENAME_FROM_URL" == "/" ]]; then
             FILENAME_FROM_URL="$DOWNLOADED_FILE" # If it was empty, use a default name
           fi
