@@ -1,14 +1,14 @@
-name: انتقال فایل به گیت هاب
+name: Download file in GitHub
 
 on:
   workflow_dispatch:
     inputs:
       file_url:
-        description: 'لینک مستقیم فایل مورد نظر'
+        description: "Enter the direct link:"
         required: true
         type: string
       zip_password:
-        description: 'رمز عبور برای فایل فشرده'
+        description: "Set a password:"
         required: true
         type: string
 
@@ -43,13 +43,13 @@ jobs:
           DOWNLOADED_FILE="${{ steps.download_file.outputs.downloaded_file_name }}"
           ORIGINAL_URL="${{ github.event.inputs.file_url }}"
 
-          # استخراج نام فایل از URL
+          # Extract filename from URL
           FILENAME_FROM_URL=$(basename "$ORIGINAL_URL")
           if [[ -z "$FILENAME_FROM_URL" || "$FILENAME_FROM_URL" == "/" ]]; then
-            FILENAME_FROM_URL="$DOWNLOADED_FILE" # اگر نام فایل از URL خالی بود، از نام پیش‌فرض استفاده می‌کنیم
+            FILENAME_FROM_URL="$DOWNLOADED_FILE" # If it was empty, use a default name
           fi
           
-          # جدا کردن نام فایل از پسوند آن
+          # Separate base name and extension
           FILENAME_BASE=$(echo "$FILENAME_FROM_URL" | sed 's/\.[^.]*$//') # نام بدون پسوند
           FILENAME_EXT="${FILENAME_FROM_URL##*.}" # پسوند فایل
 
@@ -59,7 +59,7 @@ jobs:
           fi
 
           # پیشوند دلخواه
-          ARCHIVE_PREFIX="sci-hub.ir_"
+          ARCHIVE_PREFIX="m-sarabi_"
 
           # ترکیب پیشوند و نام پایه فایل
           FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${FILENAME_BASE}"
