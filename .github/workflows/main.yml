@@ -53,18 +53,18 @@ jobs:
           FILENAME_BASE=$(echo "$FILENAME_FROM_URL" | sed 's/\.[^.]*$//') # base name
           FILENAME_EXT="${FILENAME_FROM_URL##*.}" # extension
 
-          # اگر پسوندی وجود نداشت (یعنی فایل بدون پسوند بود)، پسوند را خالی در نظر می‌گیریم
+          # If extension was empty, leave it empty
           if [[ "$FILENAME_BASE" == "$FILENAME_FROM_URL" ]]; then
             FILENAME_EXT=""
           fi
 
-          # پیشوند دلخواه
+          # prefix
           ARCHIVE_PREFIX="m-sarabi_"
 
-          # ترکیب پیشوند و نام پایه فایل
+          # Full base name
           FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${FILENAME_BASE}"
 
-          # --- مدیریت طول نام فایل ---
+          # --- Shorten long file names ---
           MAX_TOTAL_LEN=50
           CURRENT_LEN=${#FULL_ARCHIVE_NAME}
 
@@ -75,7 +75,7 @@ jobs:
             FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${SHORT_FILENAME_BASE}"
           fi
           
-          # اضافه کردن پسوند نهایی (اگر وجود داشت)
+          # Append file extension
           if [[ -n "$FILENAME_EXT" ]]; then
             FINAL_ARCHIVE_FILENAME="${FULL_ARCHIVE_NAME}.${FILENAME_EXT}"
           else
@@ -85,7 +85,7 @@ jobs:
           echo "Original file name: ${FILENAME_FROM_URL}"
           echo "Archive base name will be: ${FINAL_ARCHIVE_FILENAME}"
 
-          # خروجی‌ها برای استفاده در step های بعدی
+          # Outputs for later steps
           echo "archive_base_name=${FULL_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
           echo "downloaded_file_name=${DOWNLOADED_FILE}" >> $GITHUB_OUTPUT
           echo "file_extension=${FILENAME_EXT}" >> $GITHUB_OUTPUT
@@ -112,7 +112,7 @@ jobs:
           ARCHIVE_NAME_PREFIX="${{ steps.get_filename.outputs.archive_base_name }}"
           NEW_ORIGINAL_FILENAME="${{ steps.rename_file.outputs.new_original_filename }}"
 
-          # ساخت آرشیو چند تکه رمزدار ۷z (هر تکه حدود ۸۵ مگابایت)
+          # Create multi-part, password-protected 7z archive
           7z a -p"${{ github.event.inputs.zip_password }}" -mhe=on -mx=3 -v85m "${ARCHIVE_NAME_PREFIX}.7z" "$NEW_ORIGINAL_FILENAME"
 
       - name: Remove original downloaded file
