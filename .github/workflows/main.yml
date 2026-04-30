@@ -50,8 +50,8 @@ jobs:
           fi
           
           # Separate base name and extension
-          FILENAME_BASE=$(echo "$FILENAME_FROM_URL" | sed 's/\.[^.]*$//') # نام بدون پسوند
-          FILENAME_EXT="${FILENAME_FROM_URL##*.}" # پسوند فایل
+          FILENAME_BASE=$(echo "$FILENAME_FROM_URL" | sed 's/\.[^.]*$//') # base name
+          FILENAME_EXT="${FILENAME_FROM_URL##*.}" # extension
 
           # اگر پسوندی وجود نداشت (یعنی فایل بدون پسوند بود)، پسوند را خالی در نظر می‌گیریم
           if [[ "$FILENAME_BASE" == "$FILENAME_FROM_URL" ]]; then
