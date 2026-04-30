@@ -41,6 +41,8 @@ jobs:
           git rm -rf --quiet . || true     # clean the index (orphan branch starts empty)
           # If we just created the branch, we need to make an empty initial commit so it exists
           if ! git rev-parse --verify downloads^{commit} >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
             git commit --allow-empty -m "Initialize orphan branch for file chunks"
             git push origin downloads
           fi
