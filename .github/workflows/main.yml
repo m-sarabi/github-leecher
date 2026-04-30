@@ -12,8 +12,8 @@ on:
         required: true
         type: string
       split_size:
-        description: 'Size of each archive chunk:'
-        default: '100m'
+        description: 'Size of each archive chunk in MB:'
+        default: '100'
         required: false
       archive_prefix:
         description: 'Prefix for archive name:'
@@ -29,15 +29,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
 
-      - name: Install 7z
+      - name: Checkout default branch (to access Git history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # fetch all history so we can create an orphan branch correctly
+
+      - name: Switch to orphan branch 'downloads'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          git checkout --orphan downloads  2>/dev/null || git checkout downloads
+          git rm -rf --quiet . || true     # clean the index (orphan branch starts empty)
+          # If we just created the branch, we need to make an empty initial commit so it exists
+          if ! git rev-parse --verify downloads^{commit} >/dev/null 2>&1; then
+            git commit --allow-empty -m "Initialize orphan branch for file chunks"
+            git push origin downloads
+          fi
+          # Now we are on the 'downloads' branch, no files from other branches
+
+      - name: Ensure 7z is available
+        run: |
+          if command -v 7z &> /dev/null; then
+            echo "7z is already installed."
+          else
+            echo "Installing p7zip-full..."
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
 
       - name: Download file
         id: download_file
@@ -46,6 +63,20 @@ jobs:
           # curl -J will use the filename from the header; we can detect the downloaded file
           DOWNLOADED_FILE=$(ls -t | head -1)   # crude but works in a clean workspace
           echo "downloaded_file_name=$DOWNLOADED_FILE" >> $GITHUB_OUTPUT
+
+      - name: Validate downloaded file
+        run: |
+          FILE="${{ steps.download_file.outputs.downloaded_file_name }}"
+          if [ ! -f "$FILE" ]; then
+            echo "Error: Downloaded file does not exist."
+            exit 1
+          fi
+          size=$(stat -c%s "$FILE" 2>/dev/null || wc -c < "$FILE")
+          if [ "$size" -eq 0 ]; then
+            echo "Error: Downloaded file is empty."
+            exit 1
+          fi
+          echo "File size: $size bytes"
 
       - name: Extract original filename and prepare for archive
         id: get_filename
@@ -71,7 +102,7 @@ jobs:
           fi
 
           # prefix
-          ARCHIVE_PREFIX="m-sarabi_"
+          ARCHIVE_PREFIX="${{ github.event.inputs.archive_prefix }}"
 
           # Full base name
           FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${FILENAME_BASE}"
@@ -114,7 +145,7 @@ jobs:
           NEW_ORIGINAL_FILENAME="${{ steps.rename_file.outputs.new_original_filename }}"
 
           # Create multi-part, password-protected 7z archive
-          7z a -p"${{ github.event.inputs.zip_password }}" -mhe=on -mx=3 -v85m "${ARCHIVE_NAME_PREFIX}.7z" "$NEW_ORIGINAL_FILENAME"
+          7z a -p"${{ github.event.inputs.zip_password }}" -mhe=on -mx=3 -v"${{ github.event.inputs.split_size }}"m "${ARCHIVE_NAME_PREFIX}.7z" "$NEW_ORIGINAL_FILENAME"
 
       - name: Remove original downloaded file
         run: |
@@ -153,20 +184,21 @@ jobs:
                 push_success=true
                 break
               else
-                echo "Push failed on attempt $attempt. Retrying in 20 seconds..."
-                sleep 20
-                git fetch origin
+                echo "Push failed on attempt $attempt. Will rebase onto remote changes and retry..."
+                sleep 10
+                git fetch origin || true
+                if git rebase origin/HEAD; then
+                  echo "Rebase succeeded, retrying push immediately."
+                else
+                  echo "Rebase failed! Aborting to avoid data loss."
+                  exit 1
+                fi
               fi
             done
-
+            
             if [ "$push_success" = false ]; then
-              echo "Failed to push all chunks after multiple attempts. Attempting force push with lease..."
-              if git push origin HEAD --force-with-lease; then
-                echo "Force push successful."
-              else
-                echo "Force push also failed. Aborting."
-                exit 1
-              fi
+              echo "Push failed after $max_attempts attempts even with rebase. Aborting."
+              exit 1
             fi
           else
             echo "No changes to commit or push."
