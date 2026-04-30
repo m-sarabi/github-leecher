@@ -11,8 +11,12 @@ on:
         description: "Set a password:"
         required: true
         type: string
+      split_size:
+        description: 'Size of each archive chunk:'
+        default: '100m'
+        required: false
       archive_prefix:
-        description: 'Prefix for archive name'
+        description: 'Prefix for archive name:'
         required: false
         type: string
         default: 'm-sarabi_'
