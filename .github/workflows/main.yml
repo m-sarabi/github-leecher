@@ -11,6 +11,11 @@ on:
         description: "Set a password:"
         required: true
         type: string
+      archive_prefix:
+        description: 'Prefix for archive name'
+        required: false
+        type: string
+        default: 'm-sarabi_'
 
 permissions:
   contents: write
