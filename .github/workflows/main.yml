@@ -30,23 +30,10 @@ jobs:
 
     steps:
 
-      - name: Checkout default branch (to access Git history)
+      - name: Checkout default branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # fetch all history so we can create an orphan branch correctly
-
-      - name: Switch to orphan branch 'downloads'
-        run: |
-          git checkout --orphan downloads  2>/dev/null || git checkout downloads
-          git rm -rf --quiet . || true     # clean the index (orphan branch starts empty)
-          # If we just created the branch, we need to make an empty initial commit so it exists
-          if ! git rev-parse --verify downloads^{commit} >/dev/null 2>&1; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git commit --allow-empty -m "Initialize orphan branch for file chunks"
-            git push origin downloads
-          fi
-          # Now we are on the 'downloads' branch, no files from other branches
+          fetch-depth: 0
 
       - name: Ensure 7z is available
         run: |
@@ -141,13 +128,16 @@ jobs:
           echo "Renamed downloaded file to: $NEW_ORIGINAL_FILENAME"
           echo "new_original_filename=$NEW_ORIGINAL_FILENAME" >> $GITHUB_OUTPUT
 
+      - name: Create downloads directory
+        run: mkdir -p downloads
+
       - name: Create encrypted split archive
         run: |
           ARCHIVE_NAME_PREFIX="${{ steps.get_filename.outputs.archive_base_name }}"
           NEW_ORIGINAL_FILENAME="${{ steps.rename_file.outputs.new_original_filename }}"
 
           # Create multi-part, password-protected 7z archive
-          7z a -p"${{ github.event.inputs.zip_password }}" -mhe=on -mx=3 -v"${{ github.event.inputs.split_size }}"m "${ARCHIVE_NAME_PREFIX}.7z" "$NEW_ORIGINAL_FILENAME"
+          7z a -p"${{ github.event.inputs.zip_password }}" -mhe=on -mx=3 -v"${{ github.event.inputs.split_size }}"m "downloads/${ARCHIVE_NAME_PREFIX}.7z" "$NEW_ORIGINAL_FILENAME"
 
       - name: Remove original downloaded file
         run: |
@@ -164,11 +154,8 @@ jobs:
 
       - name: Commit and Push chunks
         run: |
-          ARCHIVE_PREFIX_FOR_GIT="${{ steps.get_filename.outputs.archive_base_name }}"
-          echo "Adding archive files matching pattern: ${ARCHIVE_PREFIX_FOR_GIT}.7z.*"
-
-          git add "${ARCHIVE_PREFIX_FOR_GIT}.7z.*" || echo "No split 7z chunks found."
-          git add "${ARCHIVE_PREFIX_FOR_GIT}.7z" || true
+          echo "Adding all files inside downloads/ directory"
+          git add downloads/
 
           echo "Added archive chunks to staging."
 
