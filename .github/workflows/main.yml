@@ -128,8 +128,10 @@ jobs:
           echo "Renamed downloaded file to: $NEW_ORIGINAL_FILENAME"
           echo "new_original_filename=$NEW_ORIGINAL_FILENAME" >> $GITHUB_OUTPUT
 
-      - name: Create downloads directory
-        run: mkdir -p downloads
+      - name: Create downloads directory (clean)
+        run: |
+          rm -rf downloads
+          mkdir -p downloads
 
       - name: Create encrypted split archive
         run: |
