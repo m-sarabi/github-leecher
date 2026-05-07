@@ -7,19 +7,10 @@ on:
         description: "Enter the direct link:"
         required: true
         type: string
-      zip_password:
-        description: "Set a password:"
-        required: true
-        type: string
       split_size:
         description: 'Size of each archive chunk in MB:'
         default: '100'
         required: false
-      archive_prefix:
-        description: 'Prefix for archive name:'
-        required: false
-        type: string
-        default: 'm-sarabi_'
 
 permissions:
   contents: write
@@ -49,8 +40,7 @@ jobs:
         id: download_file
         run: |
           curl -LJO --fail --retry 3 "${{ github.event.inputs.file_url }}"
-          # curl -J will use the filename from the header; we can detect the downloaded file
-          DOWNLOADED_FILE=$(ls -t | head -1)   # crude but works in a clean workspace
+          DOWNLOADED_FILE=$(ls -t | head -1)
           echo "downloaded_file_name=$DOWNLOADED_FILE" >> $GITHUB_OUTPUT
 
       - name: Validate downloaded file
@@ -70,80 +60,58 @@ jobs:
       - name: Extract original filename and prepare for archive
         id: get_filename
         run: |
-          DOWNLOADED_FILE="${{ steps.download_file.outputs.downloaded_file_name }}"
           ORIGINAL_URL="${{ github.event.inputs.file_url }}"
 
-          # Extract filename from URL
+          # Remove query/hash fragments to get clean filename
           CLEAN_URL="${ORIGINAL_URL%%\?*}"
           CLEAN_URL="${CLEAN_URL%%#*}"
           FILENAME_FROM_URL=$(basename "$CLEAN_URL")
           if [[ -z "$FILENAME_FROM_URL" || "$FILENAME_FROM_URL" == "/" ]]; then
-            FILENAME_FROM_URL="$DOWNLOADED_FILE" # If it was empty, use a default name
+            FILENAME_FROM_URL="${{ steps.download_file.outputs.downloaded_file_name }}"
           fi
           
           # Separate base name and extension
-          FILENAME_BASE=$(echo "$FILENAME_FROM_URL" | sed 's/\.[^.]*$//') # base name
-          FILENAME_EXT="${FILENAME_FROM_URL##*.}" # extension
+          FILENAME_BASE=$(echo "$FILENAME_FROM_URL" | sed 's/\.[^.]*$//')
+          FILENAME_EXT="${FILENAME_FROM_URL##*.}"
 
-          # If extension was empty, leave it empty
           if [[ "$FILENAME_BASE" == "$FILENAME_FROM_URL" ]]; then
             FILENAME_EXT=""
           fi
 
-          # prefix
-          ARCHIVE_PREFIX="${{ github.event.inputs.archive_prefix }}"
+          # No prefix – use base name directly for the archive
+          ARCHIVE_NAME_PREFIX="${FILENAME_BASE}"
 
-          # Full base name
-          FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${FILENAME_BASE}"
-          
-          # Append file extension
+          # Final filename (original name from URL, without any prefix)
           if [[ -n "$FILENAME_EXT" ]]; then
-            FINAL_ARCHIVE_FILENAME="${FULL_ARCHIVE_NAME}.${FILENAME_EXT}"
+            FINAL_ARCHIVE_FILENAME="${FILENAME_BASE}.${FILENAME_EXT}"
           else
-            FINAL_ARCHIVE_FILENAME="${FULL_ARCHIVE_NAME}"
+            FINAL_ARCHIVE_FILENAME="${FILENAME_BASE}"
           fi
 
           echo "Original file name: ${FILENAME_FROM_URL}"
-          echo "Archive base name will be: ${FINAL_ARCHIVE_FILENAME}"
+          echo "Archive base name will be: ${ARCHIVE_NAME_PREFIX}"
 
-          # Outputs for later steps
-          echo "archive_base_name=${FULL_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
-          echo "downloaded_file_name=${DOWNLOADED_FILE}" >> $GITHUB_OUTPUT
-          echo "file_extension=${FILENAME_EXT}" >> $GITHUB_OUTPUT
+          echo "archive_base_name=${ARCHIVE_NAME_PREFIX}" >> $GITHUB_OUTPUT
           echo "final_archive_name=${FINAL_ARCHIVE_FILENAME}" >> $GITHUB_OUTPUT
-
-      - name: Rename downloaded file
-        id: rename_file
-        run: |
-          ARCHIVE_NAME_PREFIX="${{ steps.get_filename.outputs.archive_base_name }}"
-          DOWNLOADED_FILE="${{ steps.get_filename.outputs.downloaded_file_name }}"
-          EXT="${{ steps.get_filename.outputs.file_extension }}"
-
-          NEW_ORIGINAL_FILENAME="$ARCHIVE_NAME_PREFIX"
-          if [[ -n "$EXT" ]]; then
-            NEW_ORIGINAL_FILENAME="${ARCHIVE_NAME_PREFIX}.${EXT}"
-          fi
-
-          mv "$DOWNLOADED_FILE" "$NEW_ORIGINAL_FILENAME"
-          echo "Renamed downloaded file to: $NEW_ORIGINAL_FILENAME"
-          echo "new_original_filename=$NEW_ORIGINAL_FILENAME" >> $GITHUB_OUTPUT
 
       - name: Create downloads directory (clean)
         run: |
           rm -rf downloads
           mkdir -p downloads
 
-      - name: Create encrypted split archive
+      - name: Create split archive (no password)
         run: |
           ARCHIVE_NAME_PREFIX="${{ steps.get_filename.outputs.archive_base_name }}"
-          NEW_ORIGINAL_FILENAME="${{ steps.rename_file.outputs.new_original_filename }}"
+          DOWNLOADED_FILE="${{ steps.download_file.outputs.downloaded_file_name }}"
 
-          # Create multi-part, password-protected 7z archive
-          7z a -p"${{ github.event.inputs.zip_password }}" -mhe=on -mx=3 -v"${{ github.event.inputs.split_size }}"m "downloads/${ARCHIVE_NAME_PREFIX}.7z" "$NEW_ORIGINAL_FILENAME"
+          # Create multi-part 7z archive with no encryption
+          7z a -mx=3 -v"${{ github.event.inputs.split_size }}"m \
+               "downloads/${ARCHIVE_NAME_PREFIX}.7z" \
+               "$DOWNLOADED_FILE"
 
       - name: Remove original downloaded file
         run: |
-          FILE="${{ steps.rename_file.outputs.new_original_filename }}"
+          FILE="${{ steps.download_file.outputs.downloaded_file_name }}"
           if [[ -n "$FILE" && -f "$FILE" ]]; then
             rm "$FILE"
           fi
